@@ -2,7 +2,13 @@
 
 
 ## Loading and preprocessing the data
+
 ```{r loading, echo=TRUE}
+
+# Fetch the data file and unzip it into the './data' directory (if required).
+# Then read the 'activity.csv' file.  
+
+
 fileUrl <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
 localFilename <- "activity.zip"
 
@@ -22,42 +28,78 @@ activityData <- read.csv("./data/activity.csv")
 ## What is mean, median total number of steps taken per day?
 
 ```{r dailysummary, echo=TRUE}
+
+# 1. Summarize the activity data by day using ddply (see package plyr)
+
 require(plyr)
 summ1 <- ddply(activityData, "date", summarize,
                totalSteps = sum(steps),
                medianSteps = median(steps, na.rm=TRUE))
+
+# 2. Plot a histogram of the *total* steps per day
+
 hist(summ1$totalSteps, 
-     xlab = "Total Steps per Day",
-     main = NULL)
-mean(summ1$totalSteps, na.rm=TRUE)
-median(summ1$totalSteps, na.rm=TRUE)
+     xlab = "Steps",
+     main = "Total Steps per Day")
+
+# 3. Report the mean and median total steps per day (ignoring missing values)
+
+dailyMean <- mean(summ1$totalSteps, na.rm=TRUE)
+dailyMedian <- median(summ1$totalSteps, na.rm=TRUE)
+print(paste("The mean number of total steps in a day: ",
+            dailyMean))
+print(paste("The median number of total steps in a day: ",
+            dailyMedian))
 ```
 
 ## What is the average daily activity pattern?
 
 
 ```{r dailyaverage, echo=TRUE}
+
+# 1. Summarize the activity data by interval using ddply
+
 summ2 <- ddply(activityData, "interval", summarize,
-                meanSteps = mean(steps, na.rm=TRUE))
-require(ggplot2)
-plot2 <- qplot(summ2$interval, summ2$meanSteps, 
-               xlab="Interval", ylab="mean number of steps",
-               geom="line")
-print(plot2)
-summ2[order(summ2$meanSteps, decreasing=TRUE)[1],1]
+                meanSteps = mean(steps, na.rm=TRUE),
+                medianSteps = median(steps, na.rm=TRUE))
 summ2$interval <- as.factor(summ2$interval)
-```{r}
+
+# 2. Output a time series plot of average number of steps taken vs. interval
+
+with(summ2,
+     plot(as.character(interval), meanSteps, type = "l",
+          xlab = "Interval", ylab = "mean steps",
+          main = "Average Daily Activity Pattern"))
+
+# 3. Report the 5-minute interval containing on average the max number of steps
+
+peakInterval <- summ2$interval[order(summ2$meanSteps, decreasing=TRUE)[1]]
+print(paste("The interval with the maximum average number of steps: ", peakInterval))
+```
 
 ## Imputing missing values
+
 ```{r imputemissing, echo=TRUE}
 
-miss = is.na(activityData$steps)
-print(sum(miss))
+# 1. Find and report number of missing values in activity data
 
-# fill in missing data: first check if there are insufficient past points
-# to fill in the data using moving average, in which case use the mean value
-# for that time interval, else fill in the missing data point with the mean
-# of the preceeding values within a specified window
+miss <- is.na(activityData$steps)
+print(paste(sum(miss), " missing values in data set"))
+
+# 2. fill in missing data with simple strategy:
+
+# First check if there are insufficient past points to fill in the data using
+# a moving average. In which case use the mean value for that time interval,
+# else fill in the missing data point with the mean of the preceeding values
+# within a specified window size.
+#
+# The rationale used is that if they day shows cyclical patterns (for example,
+# high level of activity in the morning and very low activity in the evening)
+# by using a moving average a missing value will be similar to the activity of
+# the nearest past neighbors.
+#
+# Note that the floor() function is used on the mean values to keep number of
+# steps an integer value
 
 meanWindow = 12
 missIndexes <- which(miss)
@@ -68,12 +110,12 @@ for (j in 1:length(missIndexes)) {
     i <- missIndexes[j]
     countMissPast <- sum(missIndexes >= i-meanWindow & missIndexes <= i-1)
     if ((i < meanWindow) || (countMissPast > 0)) {
-        mungedActivityData$steps[i] <- with(summ2,
-                meanSteps[interval == as.character(mungedActivityData$interval[i])])
+        mungedActivityData$steps[i] <- with(summ2, floor(
+                meanSteps[interval == as.character(mungedActivityData$interval[i])]))
         replaceByMean[j] <- TRUE
     } else {
-        mungedActivityData$steps[i] <- 
-                mean(mungedActivityData$steps[(i-meanWindow):(i-1)])
+        mungedActivityData$steps[i] <- floor(
+                mean(mungedActivityData$steps[(i-meanWindow):(i-1)]))
         replaceByMovingAverage[j] <- TRUE
     }
 }
@@ -87,16 +129,43 @@ print(paste(sum(replaceByMovingAverage),
 ## What is mean, median total number of steps taken per day after filling missing values?
 
 ```{r newdailysummary, echo=TRUE}
+
+# 1. Summarize the new activity data set by day using ddply
+
 require(plyr)
 summ4 <- ddply(mungedActivityData, "date", summarize,
                totalSteps = sum(steps),
                medianSteps = median(steps, na.rm=TRUE))
+
+# 2. Plot a histogram of the *total* steps per day
+
 hist(summ4$totalSteps, 
-     xlab = "Total Steps per Day",
-     main = NULL)
-mean(summ4$totalSteps)
-median(summ4$totalSteps)
+     xlab = "Steps",
+     main = "Total Steps per Day (after filling missing values)")
+
+# 3. Report the mean and median total steps per day (ignoring missing values)
+
+dailyMean <- mean(summ4$totalSteps, na.rm=TRUE)
+dailyMedian <- median(summ4$totalSteps, na.rm=TRUE)
+print(paste("The mean number of total steps in a day: ",
+            dailyMean))
+print(paste("The median number of total steps in a day: ",
+            dailyMedian))
 ```
+
+Using the median to fill in the data was of no use: run a summary on
+`activityData' and it is easy to see that the median steps will be 0. The
+histogram shows higher frequency near the center of the data (note the y-axis
+label of 35 instead of 25). The mean number is fairly similar, while the median
+number has dropped more noticeably.  
+
+The choice of `ceiling()` or `floor()` can have a pretty dramatic effect
+on the results. The results are very close after skipping those functions when
+filling in missing values.  Rounding down seems more reasonable as it tends to
+lower the the mean activity level which is consistent with the assuming the
+activity level is sedentary. It is pretty surprising the frequency of missing
+values that appear and how very few of the missing data points were able to
+exploit the use of a moving average.
 
 ## Are there differences in activity patterns between weekdays and weekends?
 
@@ -120,5 +189,9 @@ require(lattice)
 plt5 <- xyplot(meanSteps ~ interval | dayType, summ5, layout = c(1,2),
                            type = "l", xlab = "Interval", ylab = "Number of Steps")
 print(plt5)
+
+# compare the mean and median
+
+#wkdayMean <-
 
 ```

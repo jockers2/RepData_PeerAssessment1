@@ -190,8 +190,17 @@ plt5 <- xyplot(meanSteps ~ interval | dayType, summ5, layout = c(1,2),
                            type = "l", xlab = "Interval", ylab = "Number of Steps")
 print(plt5)
 
-# compare the mean and median
+# compare the weekend to weekday
 
-#wkdayMean <-
+summ5 <- ddply(summ5, "dayType", summarize,
+               sumTotalSteps = sum(totalSteps),
+               meanMeanSteps = mean(meanSteps),
+               meanMedianSteps = mean(medianSteps))
+print(summ5)
 
 ```
+The weekday shows a higher peak and more total steps than the weekend. However,
+activity begins much earlier and spikes in the first third of the weekday
+(perhaps morning?) then the activity level is lower through the rest of the day.
+Weekends are for sleeping in but do show steadier activity levels throughout
+the day.
